@@ -18,12 +18,19 @@ def index():
     return "LuxaBot Online!", 200
 
 # === Discord Alert Function ===
-def send_discord_alert(tx_sig):
+def send_discord_alert(tx_sig, mint=None, price=None, buyer=None, seller=None, marketplace=None):
     msg = {
         "embeds": [{
-            "title": "🔔 New Wallet Transaction",
-            "description": f"[View on Solscan](https://solscan.io/tx/{tx_sig})",
-            "color": 16711680,
+            "title": "🧾 New NFT Sale Detected!",
+            "description": f"[View Transaction on Solscan](https://solscan.io/tx/{tx_sig})",
+            "fields": [
+                {"name": "💰 Sale Amount", "value": f"{price:.2f} SOL" if price else "N/A", "inline": True},
+                {"name": "🎨 NFT Mint", "value": mint or "N/A", "inline": True},
+                {"name": "🧑‍💼 Buyer", "value": buyer or "Unknown", "inline": False},
+                {"name": "🧑‍🔧 Seller", "value": seller or "Unknown", "inline": False},
+                {"name": "🏪 Marketplace", "value": marketplace or "Unknown", "inline": True}
+            ],
+            "color": 3066993,
             "footer": {
                 "text": f"LuxaBot | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             }
@@ -32,7 +39,6 @@ def send_discord_alert(tx_sig):
 
     try:
         print(f"🚀 Sending Discord alert for: {tx_sig}")
-#       print(f"🔗 Using Webhook URL: {DISCORD_WEBHOOK_URL}")  # <- left out for security
         res = requests.post(DISCORD_WEBHOOK_URL, json=msg)
         print(f"✅ Discord Response: {res.status_code}")
         print(f"📝 Response Body: {res.text}")
@@ -44,24 +50,36 @@ def send_discord_alert(tx_sig):
 def webhook():
     try:
         data = request.get_json(force=True)
-        print("📦 Incoming Webhook Payload:")
-        print(json.dumps(data, indent=2))  # Pretty print the payload
+
+        # === Visual Header for Logs ===
+        print("\n" + "=" * 60)
+        print(f"🛰️  Incoming Transaction — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print("=" * 60)
 
         # === Respond Immediately ===
         response = jsonify({"status": "received"})
         response.status_code = 200
 
-        # === Extract Signature ===
-        sig = None
-        
-        # ✅ Check for Helius-style list payload first
+        sig, mint, price, buyer, seller, marketplace = (None, None, None, None, None, None)
+
+        # ✅ Helius-style list payload
         if isinstance(data, list) and len(data) > 0:
-            events = data[0].get("events", {})
-            if "nft" in events and "signature" in events["nft"]:
-                sig = events["nft"]["signature"]
-                print(f"🧪 Extracted Signature from Helius-style list: {sig}")
-        
-        # 🔁 Then fallback to dict-based legacy payloads
+            nft_event = data[0].get("events", {}).get("nft", {})
+            sig = nft_event.get("signature")
+            mint = nft_event.get("nfts", [{}])[0].get("mint")
+            price = nft_event.get("amount") / 1e9 if nft_event.get("amount") else None
+            buyer = nft_event.get("buyer")
+            seller = nft_event.get("seller")
+            marketplace = nft_event.get("source")
+
+            print(f"🧪 Extracted Signature from Helius-style list: {sig}")
+            print(f"💰 Price: {price} SOL")
+            print(f"🎨 Mint: {mint}")
+            print(f"🧑‍💼 Buyer: {buyer}")
+            print(f"🧑‍🔧 Seller: {seller}")
+            print(f"🏪 Marketplace: {marketplace}")
+
+        # 🔁 Fallback for legacy dicts
         elif isinstance(data, dict):
             if "transactions" in data:
                 tx_list = data["transactions"]
@@ -78,7 +96,7 @@ def webhook():
         # === Send Discord Alert ===
         if sig:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] 🚨 Webhook TX: https://solscan.io/tx/{sig}")
-            send_discord_alert(sig)
+            send_discord_alert(sig, mint, price, buyer, seller, marketplace)
         else:
             print("⚠️ No signature found in payload.")
 
