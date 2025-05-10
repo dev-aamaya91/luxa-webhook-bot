@@ -17,7 +17,7 @@ if not DISCORD_WEBHOOK_URL:
 def index():
     return "LuxaBot Online!", 200
 
-# === Discord Alert Function ===
+# === Discord Alert Function (NFT-specific for now) ===
 def send_discord_alert(tx_sig, mint=None, price=None, buyer=None, seller=None, marketplace=None):
     msg = {
         "embeds": [{
@@ -56,47 +56,53 @@ def webhook():
         print(f"🛰️  Incoming Transaction — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("=" * 60)
 
-        # === Respond Immediately ===
         response = jsonify({"status": "received"})
         response.status_code = 200
 
-        sig, mint, price, buyer, seller, marketplace = (None, None, None, None, None, None)
+        sig = mint = price = buyer = seller = marketplace = None
 
-        # ✅ Helius-style list payload
+        # ✅ Helius-style list (preferred)
         if isinstance(data, list) and len(data) > 0:
-            nft_event = data[0].get("events", {}).get("nft", {})
-            sig = nft_event.get("signature")
-            mint = nft_event.get("nfts", [{}])[0].get("mint")
-            price = nft_event.get("amount") / 1e9 if nft_event.get("amount") else None
-            buyer = nft_event.get("buyer")
-            seller = nft_event.get("seller")
-            marketplace = nft_event.get("source")
+            sig = data[0].get("signature")
 
-            print(f"🧪 Extracted Signature from Helius-style list: {sig}")
-            print(f"💰 Price: {price} SOL")
-            print(f"🎨 Mint: {mint}")
-            print(f"🧑‍💼 Buyer: {buyer}")
-            print(f"🧑‍🔧 Seller: {seller}")
-            print(f"🏪 Marketplace: {marketplace}")
+            # If it's an NFT sale, extract sale-specific info
+            nft_event = data[0].get("events", {}).get("nft")
+            if nft_event:
+                mint = nft_event.get("nfts", [{}])[0].get("mint")
+                price = nft_event.get("amount", 0) / 1e9
+                buyer = nft_event.get("buyer")
+                seller = nft_event.get("seller")
+                marketplace = nft_event.get("source")
 
-        # 🔁 Fallback for legacy dicts
+                print(f"🧪 NFT Sale Event Detected")
+                print(f"💰 Price: {price} SOL")
+                print(f"🎨 Mint: {mint}")
+                print(f"🧑‍💼 Buyer: {buyer}")
+                print(f"🧑‍🔧 Seller: {seller}")
+                print(f"🏪 Marketplace: {marketplace}")
+            else:
+                print("⚠️ Non-NFT transaction detected — ignoring for now")
+        
+        # 🔁 Fallback for legacy dict-style
         elif isinstance(data, dict):
             if "transactions" in data:
                 tx_list = data["transactions"]
-                print(f"🔍 Found transactions list with {len(tx_list)} entries")
                 if isinstance(tx_list, list) and len(tx_list) > 0:
                     sig = tx_list[0].get("signature")
-                    print(f"📌 Extracted signature: {sig}")
+                    print(f"📌 Extracted legacy signature: {sig}")
             elif "transaction" in data and "signature" in data["transaction"]:
                 sig = data["transaction"]["signature"]
-                print(f"📌 Extracted legacy transaction signature: {sig}")
+                print(f"📌 Extracted legacy single signature: {sig}")
             else:
-                print("❗ No valid transaction signature found in dict payload")
+                print("❗ No valid transaction signature in dict payload")
 
-        # === Send Discord Alert ===
+        # === Discord Alert ===
         if sig:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] 🚨 Webhook TX: https://solscan.io/tx/{sig}")
-            send_discord_alert(sig, mint, price, buyer, seller, marketplace)
+            if mint:  # NFT logic only for now
+                send_discord_alert(sig, mint, price, buyer, seller, marketplace)
+            else:
+                print("📭 No NFT mint — skipping Discord alert.")
         else:
             print("⚠️ No signature found in payload.")
 
@@ -106,6 +112,6 @@ def webhook():
         print(f"💥 Error processing webhook: {e}")
         return jsonify({"status": "error"}), 500
 
-# === Entry Point for Local Testing ===
+# === Entry Point ===
 if __name__ == "__main__":
     app.run(port=8080)
