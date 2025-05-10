@@ -41,27 +41,33 @@ def webhook():
         print("📦 Incoming Webhook Payload:")
         print(data)
 
-        # === Respond Immediately ===
+        # ✅ Respond Immediately
         response = jsonify({"status": "received"})
         response.status_code = 200
 
-        # === Extract Signature ===
+        # === Extract Transaction Signature ===
         sig = None
-        if isinstance(data, dict):
+
+        # Helius payload style: List with nested signature
+        if isinstance(data, list) and len(data) > 0:
+            first_item = data[0]
+            if "events" in first_item and "nft" in first_item["events"]:
+                sig = first_item["events"]["nft"].get("signature")
+                print(f"🧪 Extracted Signature from Helius-style list: {sig}")
+
+        # Legacy style fallbacks
+        elif isinstance(data, dict):
             if "transactions" in data:
                 tx_list = data["transactions"]
                 print(f"🔍 Found transactions list with {len(tx_list)} entries")
-
                 if isinstance(tx_list, list) and len(tx_list) > 0:
                     sig = tx_list[0].get("signature")
                     print(f"📌 Extracted signature: {sig}")
-                else:
-                    print("⚠️ 'transactions' key exists but list is empty or invalid")
             elif "transaction" in data and "signature" in data["transaction"]:
                 sig = data["transaction"]["signature"]
                 print(f"📌 Extracted legacy transaction signature: {sig}")
             else:
-                print("❗ No valid transaction signature found in payload")
+                print("❗ No valid transaction signature found in dict payload")
 
         # === Send Discord Alert ===
         if sig:
