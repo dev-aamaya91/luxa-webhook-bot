@@ -26,7 +26,7 @@ def send_discord_alert(tx_sig):
 
     try:
         print(f"🚀 Sending Discord alert for: {tx_sig}")
-        print(f"🔗 Using Webhook URL: {DISCORD_WEBHOOK_URL}")
+#       print(f"🔗 Using Webhook URL: {DISCORD_WEBHOOK_URL}")
         res = requests.post(DISCORD_WEBHOOK_URL, json=msg)
         print(f"✅ Discord Response: {res.status_code}")
         print(f"📝 Response Body: {res.text}")
