@@ -53,22 +53,27 @@ def webhook():
 
         # === Extract Signature ===
         sig = None
-        if isinstance(data, dict):
+        
+        # ✅ Check for Helius-style list payload first
+        if isinstance(data, list) and len(data) > 0:
+            events = data[0].get("events", {})
+            if "nft" in events and "signature" in events["nft"]:
+                sig = events["nft"]["signature"]
+                print(f"🧪 Extracted Signature from Helius-style list: {sig}")
+        
+        # 🔁 Then fallback to dict-based legacy payloads
+        elif isinstance(data, dict):
             if "transactions" in data:
                 tx_list = data["transactions"]
                 print(f"🔍 Found transactions list with {len(tx_list)} entries")
                 if isinstance(tx_list, list) and len(tx_list) > 0:
                     sig = tx_list[0].get("signature")
                     print(f"📌 Extracted signature: {sig}")
-                else:
-                    print("⚠️ 'transactions' key exists but list is empty or invalid")
-            elif isinstance(data, list) and len(data) > 0:
-                events = data[0].get("events", {})
-                if "nft" in events and "signature" in events["nft"]:
-                    sig = events["nft"]["signature"]
-                    print(f"🧪 Extracted Signature from Helius-style list: {sig}")
+            elif "transaction" in data and "signature" in data["transaction"]:
+                sig = data["transaction"]["signature"]
+                print(f"📌 Extracted legacy transaction signature: {sig}")
             else:
-                print("❗ No valid transaction signature found in payload")
+                print("❗ No valid transaction signature found in dict payload")
 
         # === Send Discord Alert ===
         if sig:
